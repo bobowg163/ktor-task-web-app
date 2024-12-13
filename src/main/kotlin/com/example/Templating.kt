@@ -2,6 +2,8 @@ package com.example
 
 import com.example.model.Priority
 import com.example.model.Task
+import com.example.model.TaskRepository
+import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.http.content.*
 import io.ktor.server.response.*
@@ -19,18 +21,47 @@ fun Application.configureTemplating() {
         })
     }
     routing {
-        get("/html-thymeleaf") {
-            call.respond(ThymeleafContent("index", mapOf("user" to ThymeleafUser(1, "user1"))))
-        }
         get("/tasks") {
-            val tasks = listOf(
-                Task("cleaning", "Clean the house", Priority.Low),
-                Task("gardening", "Mow the lawn", Priority.Medium),
-                Task("shopping", "Buy the groceries", Priority.High),
-                Task("painting", "Paint the fence", Priority.Medium)
-            )
+            val tasks = TaskRepository.allTasks()
             call.respond(ThymeleafContent("all-tasks", mapOf("tasks" to tasks)))
+        }
+        get("/byName") {
+            val name = call.request.queryParameters["name"]
+            if (name == null) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+            val task = TaskRepository.tasksByName(name)
+            if (task == null) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
+            call.respond(ThymeleafContent("single-task", mapOf("task" to task)))
+        }
+        get("/byPriority"){
+            val priorityAsText = call.request.queryParameters["priority"]
+            if (priorityAsText == null) {
+                call.respond(HttpStatusCode.BadRequest)
+                return@get
+            }
+            try {
+                val priority = Priority.valueOf(priorityAsText)
+                val tasks = TaskRepository.tasksByPriority(priority)
+
+
+                if (tasks.isEmpty()) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@get
+                }
+                val data = mapOf(
+                    "priority" to priority,
+                    "tasks" to tasks
+                )
+                call.respond(ThymeleafContent("tasks-by-priority", data))
+            } catch (ex: IllegalArgumentException) {
+                call.respond(HttpStatusCode.BadRequest)
+            }
         }
     }
 }
-data class ThymeleafUser(val id: Int, val name: String)
+
